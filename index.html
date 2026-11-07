@@ -12,7 +12,7 @@
 <body><header><div class="wrap" style="padding-top:0;padding-bottom:0"><div class="eyebrow">MG CLEANERS</div><h1>Walkthrough Tally</h1><p>Count as you go. Tap an item to count it. Use − or Undo to correct mistakes.</p></div></header>
 <main class="wrap"><section id="previewNotice" class="box" style="border:2px solid #c79548;background:#fff7e8;display:block" role="alert"><strong>⚠️ This is a file preview, not the working app.</strong><p style="margin:8px 0 0;line-height:1.5">The counters are not loaded. Opening this file in the iPhone Files preview may block the app's JavaScript. Publish the contents of this folder to GitHub Pages, then open the resulting https:// link in Safari.</p></section>
 <section class="box"><h2 style="margin-bottom:12px">Client details</h2><div class="grid"><div><label for="client">Client name</label><input id="client" autocomplete="off" placeholder="e.g. Megan"></div><div><label for="visitDate">Estimate date</label><input id="visitDate" type="date"></div></div></section>
-<section class="box"><div class="sectionheading"><h2>Windows & glass</h2><span style="color:#647867;font-size:12px">Tap a row or + to count</span></div><div id="standard"></div><div class="sum"><span>Total counted items</span><strong id="total">0</strong></div></section>
+<section class="box"><div class="sectionheading"><h2>Windows</h2><span style="color:#647867;font-size:12px">Tap a row or + to count</span></div><div id="standard"></div><div class="sum"><span>Total counted items</span><strong id="total">0</strong></div></section>
 <section class="box"><div class="sectionheading"><h2>Other items</h2></div><div id="custom"></div><div class="add"><input id="newItem" placeholder="Add item (e.g. blinds)" aria-label="New countable item"><button id="addItem" class="btn secondary" type="button">Add</button></div></section>
 <section class="box"><label for="notes">Requests and estimate notes</label><textarea id="notes" placeholder="Window locations, inside/outside, fragile items, areas to skip, special requests…"></textarea><div class="small">Everything stays saved in this browser until you clear it. It does not sync between devices.</div></section>
 <section class="box"><div class="buttons"><button id="copy" class="btn" type="button">Copy estimate</button><button id="download" class="btn secondary" type="button">Save text file</button></div><div class="buttons" style="margin-top:9px"><button id="undo" class="btn outline" type="button">Undo last change</button><button id="reset" class="btn outline" type="button">New walkthrough</button></div><p id="status" role="status" aria-live="polite"></p></section>
@@ -20,9 +20,12 @@
 </main>
 <script>
 (()=>{'use strict';
-const KEY='mg-cleaners-walkthrough-v1'; const defs=[['windows','Windows'],['screens','Window screens'],['tracks','Window tracks'],['doors','Sliding glass doors']];
+const KEY='mg-cleaners-walkthrough-v1'; const defs=[['windows','Windows']];
 function fresh(){return {client:'',visitDate:[new Date().getFullYear(),String(new Date().getMonth()+1).padStart(2,'0'),String(new Date().getDate()).padStart(2,'0')].join('-'),notes:'',counts:Object.fromEntries(defs.map(([k])=>[k,0])),custom:[]}}
 let state;try{state={...fresh(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{state=fresh()};if(!state.counts||typeof state.counts!=='object')state.counts=fresh().counts;if(!Array.isArray(state.custom))state.custom=[];
+// v4 keeps old client details, notes, and custom items but hides retired built-in counters.
+for(const oldId of ['screens','tracks','doors']) delete state.counts[oldId];
+if(!Number.isFinite(Number(state.counts.windows))) state.counts.windows=0;
 let history=[];const $=id=>document.getElementById(id);const clone=()=>JSON.parse(JSON.stringify(state));const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{message('Browser storage unavailable. Copy your notes before closing.')}};const message=s=>{$('status').textContent=s};
 function push(){history.push(clone());if(history.length>50)history.shift()}
 function change(id,delta){const before=Number(state.counts[id])||0;const after=Math.max(0,before+delta);if(after===before)return;push();state.counts[id]=after;persist();renderCounters();message(delta>0?"Added 1. Tap − or Undo to correct.":"Removed 1.")}
@@ -41,7 +44,7 @@ function row(id,name,isCustom){
   return el
 }
 function renderCounters(){const std=$('standard'),cust=$('custom');std.replaceChildren(...defs.map(([k,n])=>row(k,n,false)));cust.replaceChildren(...state.custom.map(x=>row(x.id,x.name,true)));$('total').textContent=Object.values(state.counts).reduce((a,b)=>a+(Number(b)||0),0)}
-function summary(){let date=state.visitDate||'Not entered';let lines=['MG CLEANERS — ESTIMATE WALKTHROUGH',`Client: ${state.client||'Not entered'}`,`Date: ${date}`,'','WINDOWS & GLASS',...defs.map(([id,name])=>`${name}: ${state.counts[id]||0}`)];if(state.custom.length)lines.push('','OTHER ITEMS',...state.custom.map(x=>`${x.name}: ${state.counts[x.id]||0}`));lines.push('','CLIENT REQUESTS / NOTES',state.notes||'None recorded');return lines.join('\n')}
+function summary(){let date=state.visitDate||'Not entered';let lines=['MG CLEANERS — ESTIMATE WALKTHROUGH',`Client: ${state.client||'Not entered'}`,`Date: ${date}`,'','WINDOWS',...defs.map(([id,name])=>`${name}: ${state.counts[id]||0}`)];if(state.custom.length)lines.push('','OTHER ITEMS',...state.custom.map(x=>`${x.name}: ${state.counts[x.id]||0}`));lines.push('','CLIENT REQUESTS / NOTES',state.notes||'None recorded');return lines.join('\n')}
 $('client').value=state.client;$('visitDate').value=state.visitDate;$('notes').value=state.notes;for(const id of ['client','visitDate','notes'])$(id).addEventListener('input',e=>{state[id]=e.target.value;persist()});
 $('addItem').onclick=()=>{const name=$('newItem').value.trim();if(!name)return;push();const id='c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);state.custom.push({id,name});state.counts[id]=0;$('newItem').value='';persist();renderCounters();message(`Added ${name}`)};$('newItem').addEventListener('keydown',e=>{if(e.key==='Enter')$('addItem').click()});
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText(summary());message('Copied! Paste into Notes or your client record.')}catch{const ta=document.createElement('textarea');ta.value=summary();document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();message(ok?'Copied!':'Copy unavailable; use Save text file instead.')}};
@@ -53,4 +56,3 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 })();
 </script>
 </body></html>
-
